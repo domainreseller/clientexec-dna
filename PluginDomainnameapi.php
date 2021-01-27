@@ -31,6 +31,7 @@ class PluginDomainnameapi extends RegistrarPlugin
         } else {
             $this->api->useTestMode(false);
         }
+        $this->api->setConnectionMethod('SOAP');
     }
 
     public function getVariables()
@@ -56,8 +57,18 @@ class PluginDomainnameapi extends RegistrarPlugin
                 'description' => lang('Enter the password for your Domain Name API reseller account.'),
                 'value' => '',
             ],
-            lang('Supported Features')  => [
-                'type' > 'label',
+            lang('NameServer 1') => [
+                'type' => 'text',
+                'description' => lang('Enter Name Server #1, used in stand alone domains.'),
+                'value' => '',
+            ],
+            lang('NameServer 2') => [
+                'type' => 'text',
+                'description' => lang('Enter Name Server #1, used in stand alone domains.'),
+                'value' => '',
+            ],
+            lang('Supported Features') => [
+                'type' => 'label',
                 'description' => '* '.lang('TLD Lookup').'<br>* '.lang('Domain Registration').' <br>* '.lang('Domain Registration with ID Protect').' <br>* '.lang('Existing Domain Importing').' <br>* '.lang('Get / Set Nameserver Records').' <br>* '.lang('Get / Set Contact Information').' <br>* '.lang('Get / Set Registrar Lock').' <br>* '.lang('Initiate Domain Transfer').' <br>* '.lang('Automatically Renew Domain').' <br>* '.lang('View EPP Code'),
                 'value' => ''
             ],
@@ -188,6 +199,13 @@ class PluginDomainnameapi extends RegistrarPlugin
                     break;
                 }
             }
+        }
+
+        if (count($nameServers) == 0) {
+            $nameServers = [
+                $this->settings->get('plugin_Domainnameapi_NameServer 1'),
+                $this->settings->get('plugin_Domainnameapi_NameServer 2')
+            ];
         }
 
         $privacy = false;
@@ -422,19 +440,19 @@ class PluginDomainnameapi extends RegistrarPlugin
 
         if ($result["result"] == "OK") {
             if (isset($result["data"]["NameServers"][0][0])) {
-                $info = $result["data"]["NameServers"][0][0];
+                $info[] = $result["data"]["NameServers"][0][0];
             }
             if (isset($result["data"]["NameServers"][0][1])) {
-                $info = $result["data"]["NameServers"][0][1];
+                $info[] = $result["data"]["NameServers"][0][1];
             }
             if (isset($result["data"]["NameServers"][0][2])) {
-                $info = $result["data"]["NameServers"][0][2];
+                $info[] = $result["data"]["NameServers"][0][2];
             }
             if (isset($result["data"]["NameServers"][0][3])) {
-                $info = $result["data"]["NameServers"][0][3];
+                $info[] = $result["data"]["NameServers"][0][3];
             }
             if (isset($result["data"]["NameServers"][0][4])) {
-                $info = $result["data"]["NameServers"][0][4];
+                $info[] = $result["data"]["NameServers"][0][4];
             }
 
             return $info;

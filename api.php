@@ -51,21 +51,14 @@ class APIConnection_SOAP extends APIConnection
         ini_set('soap.wsdl_cache_enabled', '1');
         ini_set('soap.wsdl_cache_ttl', '86400');
 
-        // Create unique connection
-        $this->service = new SoapClient($this->URL_SERVICE . "?singlewsdl", array("cache_wsdl" => WSDL_CACHE_MEMORY,  "encoding"=>"UTF-8"));
+        if (class_exists("SoapClient")) {
+            // Create unique connection
+            $this->service = new SoapClient($this->URL_SERVICE . "?singlewsdl", array("cache_wsdl" => WSDL_CACHE_MEMORY,  "encoding"=>"UTF-8"));
+        } else {
+            $this->service = null;
+        }
     }
-    function APIConnection_SOAP($Service_URL)
-    {
-        // Set settings
-        $this->URL_SERVICE = $Service_URL;
 
-        // Set WSDL caching enabled
-        ini_set('soap.wsdl_cache_enabled', '1');
-        ini_set('soap.wsdl_cache_ttl', '86400');
-
-        // Create unique connection
-        $this->service = new SoapClient($this->URL_SERVICE . "?singlewsdl", array("cache_wsdl" => WSDL_CACHE_MEMORY,  "encoding"=>"UTF-8"));
-    }
 
     // Convert object to array
     private function objectToArray($o)
@@ -1531,15 +1524,9 @@ class DomainNameAPI_PHPLibrary
                 $this->_CONNECTION_METHOD = "APIConnection_SOAP";
                 break;
 
-            case "CURL";
-                $this->_CONNECTION_METHOD = "APIConnection_CURL";
-                break;
-
             default:
                 if (class_exists("SoapClient")) {
                     $this->_CONNECTION_METHOD = "APIConnection_SOAP";
-                } elseif (function_exists("curl_init")) {
-                    $this->_CONNECTION_METHOD = "APIConnection_CURL";
                 } else {
                     // DUZELT
                     $this->_CONNECTION_METHOD = "ALL_OF_CONNECTION_METHODS_NOT_AVAILABLE";
@@ -1548,7 +1535,11 @@ class DomainNameAPI_PHPLibrary
         }
 
         // Prepare connection
-        $this->con = new $this->_CONNECTION_METHOD($this->_URL_SERVICE);
+        if (class_exists($this->_CONNECTION_METHOD)) {
+            $this->con = new $this->_CONNECTION_METHOD($this->_URL_SERVICE);
+        } else {
+            $this->con = null;
+        }
     }
 
 
