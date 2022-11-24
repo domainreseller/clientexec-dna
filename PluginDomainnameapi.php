@@ -13,10 +13,8 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     private $api;
 
-    public function __construct($user)
+    public function setup()
     {
-        parent::__construct($user);
-
         $this->api = new DomainNameAPI_PHPLibrary();
 
         $this->api->setUser(
@@ -43,7 +41,7 @@ class PluginDomainnameapi extends RegistrarPlugin
                 'value' => lang('Domain Name Api')
             ],
             lang('Use testing server') => [
-                'type' =>'yesno',
+                'type' => 'yesno',
                 'description' => lang('Select Yes if you wish to use the testing environment, so that transactions are not actually made.'),
                 'value' => 0
             ],
@@ -53,7 +51,7 @@ class PluginDomainnameapi extends RegistrarPlugin
                 'value' => ''
             ],
             lang('Password')  => [
-                'type' =>'password',
+                'type' => 'password',
                 'description' => lang('Enter the password for your Domain Name API reseller account.'),
                 'value' => '',
             ],
@@ -69,7 +67,7 @@ class PluginDomainnameapi extends RegistrarPlugin
             ],
             lang('Supported Features') => [
                 'type' => 'label',
-                'description' => '* '.lang('TLD Lookup').'<br>* '.lang('Domain Registration').' <br>* '.lang('Domain Registration with ID Protect').' <br>* '.lang('Existing Domain Importing').' <br>* '.lang('Get / Set Nameserver Records').' <br>* '.lang('Get / Set Contact Information').' <br>* '.lang('Get / Set Registrar Lock').' <br>* '.lang('Initiate Domain Transfer').' <br>* '.lang('Automatically Renew Domain').' <br>* '.lang('View EPP Code'),
+                'description' => '* ' . lang('TLD Lookup') . '<br>* ' . lang('Domain Registration') . ' <br>* ' . lang('Domain Registration with ID Protect') . ' <br>* ' . lang('Existing Domain Importing') . ' <br>* ' . lang('Get / Set Nameserver Records') . ' <br>* ' . lang('Get / Set Contact Information') . ' <br>* ' . lang('Get / Set Registrar Lock') . ' <br>* ' . lang('Initiate Domain Transfer') . ' <br>* ' . lang('Automatically Renew Domain') . ' <br>* ' . lang('View EPP Code'),
                 'value' => ''
             ],
             lang('Actions') => [
@@ -94,11 +92,25 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function checkDomain($params)
     {
+        $this->setup();
         $domains = [];
+
+        if (isset($params['namesuggest'])) {
+            foreach ($params['namesuggest'] as $key => $value) {
+                if ($value == $params['tld']) {
+                    unset($params['namesuggest'][$key]);
+                    break;
+                }
+            }
+            array_unshift($params['namesuggest'], $params['tld']);
+            $tldList = $params['namesuggest'];
+        } else {
+            $tldList = [$params['tld']];
+        }
 
         $result = $this->api->CheckAvailability(
             [$params['sld']],
-            [$params['tld']],
+            $tldList,
             '1',
             'create'
         );
@@ -133,7 +145,7 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $userPackage = new UserPackage($params['userPackageId']);
         $transferid = $this->initiateTransfer($this->buildTransferParams($userPackage, $params));
-        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar").'-'.$transferid);
+        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $transferid);
         $userPackage->setCustomField('Transfer Status', $transferid);
         return "Transfer of has been initiated.";
     }
@@ -147,7 +159,7 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $userPackage = new UserPackage($params['userPackageId']);
         $orderid = $this->registerDomain($this->buildRegisterParams($userPackage, $params));
-        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar").'-'.$orderid);
+        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $orderid);
         return $userPackage->getCustomField('Domain Name') . ' has been registered.';
     }
 
@@ -160,7 +172,7 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $userPackage = new UserPackage($params['userPackageId']);
         $orderid = $this->renewDomain($this->buildRenewParams($userPackage, $params));
-        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar").'-'.$orderid);
+        $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $orderid);
         return $userPackage->getCustomField('Domain Name') . ' has been renewed.';
     }
 
@@ -170,6 +182,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function initiateTransfer($params)
     {
+        $this->setup();
         $result = $this->api->Transfer($params['sld'] . '.' . $params['tld'], $params['eppCode']);
         $this->logCall($result);
         if ($result['result'] == 'OK') {
@@ -180,6 +193,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function renewDomain($params)
     {
+        $this->setup();
         $result = $this->api->Renew($params['sld'] . '.' . $params['tld'], $params['NumYears']);
         $this->logCall($result);
         if ($result['result'] == 'OK') {
@@ -190,6 +204,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function registerDomain($params)
     {
+        $this->setup();
         $nameServers = [];
         if (isset($params['NS1'])) {
             for ($i = 1; $i <= 12; $i++) {
@@ -327,6 +342,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function getContactInformation($params)
     {
+        $this->setup();
         $result = $this->api->GetContacts($params['sld'] . '.' . $params['tld']);
         $this->logCall();
         if ($result['result'] == 'OK') {
@@ -336,10 +352,10 @@ class PluginDomainnameapi extends RegistrarPlugin
                 $info[$type]['OrganizationName']  = [$this->user->lang('Organization'), $data['Company']];
                 $info[$type]['FirstName'] = [$this->user->lang('First Name'), $data['FirstName']];
                 $info[$type]['LastName']  = [$this->user->lang('Last Name'), $data['LastName']];
-                $info[$type]['Address1']  = [$this->user->lang('Address').' 1', $data['Address']['Line1']];
-                $info[$type]['Address2']  = [$this->user->lang('Address').' 2', $data['Address']['Line2']];
+                $info[$type]['Address1']  = [$this->user->lang('Address') . ' 1', $data['Address']['Line1']];
+                $info[$type]['Address2']  = [$this->user->lang('Address') . ' 2', $data['Address']['Line2']];
                 $info[$type]['City']      = [$this->user->lang('City'), $data['Address']['City']];
-                $info[$type]['StateProvince']  = [$this->user->lang('Province').'/'.$this->user->lang('State'), $data['Address']['State']];
+                $info[$type]['StateProvince']  = [$this->user->lang('Province') . '/' . $this->user->lang('State'), $data['Address']['State']];
                 $info[$type]['Country']   = [$this->user->lang('Country'), $data['Address']['Country']];
                 $info[$type]['PostalCode']  = [$this->user->lang('Postal Code'), $data['Address']['ZipCode']];
                 $info[$type]['EmailAddress']     = [$this->user->lang('E-mail'), $data['EMail']];
@@ -354,6 +370,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function setContactInformation($params)
     {
+        $this->setup();
         $result = $this->api->SaveContacts(
             $params['sld'] . '.' . $params['tld'],
             [
@@ -433,6 +450,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function getNameServers($params)
     {
+        $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
         $this->logCall();
 
@@ -463,6 +481,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function setNameServers($params)
     {
+        $this->setup();
         $nameservers = [];
 
         foreach ($params['ns'] as $value) {
@@ -479,7 +498,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function getGeneralInfo($params)
     {
-
+        $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
 
         if ($result['result'] == 'OK') {
@@ -499,6 +518,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function fetchDomains($params)
     {
+        $this->setup();
         $domainsList = [];
         $domainNameGateway = new DomainNameGateway();
 
@@ -522,6 +542,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function getRegistrarLock($params)
     {
+        $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
         if ($result['result'] == 'OK') {
             return ($result['data']['LockStatus'] == 'true' ) ? true : false;
@@ -539,6 +560,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function setRegistrarLock($params)
     {
+        $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
         if ($result['result'] == 'OK') {
             if ($result['data']['LockStatus'] == 'true') {
@@ -558,6 +580,7 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function getEPPCode($params)
     {
+        $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
         if ($result['result'] == 'OK') {
             return $result['data']['AuthCode'];
