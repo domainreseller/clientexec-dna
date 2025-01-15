@@ -1,35 +1,32 @@
 <?php
+use DomainNameApi\DomainNameAPI_PHPLibrary;
 
 require_once 'modules/admin/models/RegistrarPlugin.php';
 require_once 'plugins/registrars/domainnameapi/api.php';
 
 class PluginDomainnameapi extends RegistrarPlugin
 {
+    public const MODULE_VERSION='1.0.2';
     public $features = [
         'nameSuggest' => false,
         'importDomains' => true,
-        'importPrices' => false,
+        'importPrices' => true,
     ];
 
-    private $api;
+
+    /**
+     * @var DomainNameAPI_PHPLibrary
+     */
+    private  $api;
 
     public function setup()
     {
-        $this->api = new DomainNameAPI_PHPLibrary();
-
-        $this->api->setUser(
+        $this->api = new DomainNameAPI_PHPLibrary(
             $this->settings->get('plugin_Domainnameapi_Username'),
-            $this->settings->get('plugin_Domainnameapi_Password')
+            $this->settings->get('plugin_Domainnameapi_Password'),
+            DomainNameAPI_PHPLibrary::APPLICATION_CLIENTEXEC
         );
 
-        $this->api->useCaching(true);
-
-        if ($this->settings->get('plugin_Domainnameapi_Use testing server')) {
-            $this->api->useTestMode(true);
-        } else {
-            $this->api->useTestMode(false);
-        }
-        $this->api->setConnectionMethod('SOAP');
     }
 
     public function getVariables()
@@ -95,36 +92,22 @@ class PluginDomainnameapi extends RegistrarPlugin
         $this->setup();
         $domains = [];
 
-        if (isset($params['namesuggest'])) {
-            foreach ($params['namesuggest'] as $key => $value) {
-                if ($value == $params['tld']) {
-                    unset($params['namesuggest'][$key]);
-                    break;
-                }
-            }
+        if (!empty($params['namesuggest'])) {
+            $params['namesuggest'] = array_diff($params['namesuggest'], [$params['tld']]);
             array_unshift($params['namesuggest'], $params['tld']);
             $tldList = $params['namesuggest'];
         } else {
             $tldList = [$params['tld']];
         }
 
-        $result = $this->api->CheckAvailability(
-            [$params['sld']],
-            $tldList,
-            '1',
-            'create'
-        );
+        $result = $this->api->CheckAvailability([$params['sld']], $tldList, '1', 'create');
         $this->logCall();
 
         if ($result['result'] == 'OK') {
             foreach ($result['data'] as $domain) {
-                if ($domain['Status'] == 'notavailable') {
-                    $status = 1;
-                } elseif ($domain['Status'] == 'available') {
-                    $status = 0;
-                }
+                $status    = ($domain['Status'] == 'notavailable') ? 1 : 0;
                 $domains[] = [
-                    'tld' => $domain['TLD'],
+                    'tld'    => $domain['TLD'],
                     'domain' => $domain['DomainName'],
                     'status' => $status
                 ];
@@ -147,7 +130,7 @@ class PluginDomainnameapi extends RegistrarPlugin
         $transferid = $this->initiateTransfer($this->buildTransferParams($userPackage, $params));
         $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $transferid);
         $userPackage->setCustomField('Transfer Status', $transferid);
-        return "Transfer of has been initiated.";
+        return $this->user->lang('Transfer has been initiated.');
     }
 
     /**
@@ -160,7 +143,7 @@ class PluginDomainnameapi extends RegistrarPlugin
         $userPackage = new UserPackage($params['userPackageId']);
         $orderid = $this->registerDomain($this->buildRegisterParams($userPackage, $params));
         $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $orderid);
-        return $userPackage->getCustomField('Domain Name') . ' has been registered.';
+        return $this->user->lang('{domain} has been registered.', ['domain' => $userPackage->getCustomField('Domain Name')]);
     }
 
     /**
@@ -173,7 +156,7 @@ class PluginDomainnameapi extends RegistrarPlugin
         $userPackage = new UserPackage($params['userPackageId']);
         $orderid = $this->renewDomain($this->buildRenewParams($userPackage, $params));
         $userPackage->setCustomField("Registrar Order Id", $userPackage->getCustomField("Registrar") . '-' . $orderid);
-        return $userPackage->getCustomField('Domain Name') . ' has been renewed.';
+        return $this->user->lang('{domain} has been renewed.', ['domain' => $userPackage->getCustomField('Domain Name')]);
     }
 
     public function getTransferStatus($params)
@@ -228,75 +211,17 @@ class PluginDomainnameapi extends RegistrarPlugin
             $privacy = true;
         }
 
-        $result = $this->api->RegisterWithContactInfo(
-            $params['sld'] . '.' . $params['tld'],
-            $params['NumYears'],
-            [
-            'Administrative' => [
-                'FirstName' => $params['RegistrantFirstName'],
-                'LastName' => $params['RegistrantLastName'],
-                'Company' => $params['RegistrantOrganizationName'],
-                'EMail' => $params['RegistrantEmailAddress'],
-                'AddressLine1' => $params['RegistrantAddress1'],
-                'State' => $params['RegistrantStateProvince'],
-                'City' => $params['RegistrantCity'],
-                'Country' => $params['RegistrantCountry'],
-                'Phone' => $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'PhoneCountryCode' => $this->validateCountryCode($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'Type' => 'Contact',
-                'ZipCode' => $params['RegistrantPostalCode'],
-                'Status' => ''
-            ],
-            'Billing' => [
-                'FirstName' => $params['RegistrantFirstName'],
-                'LastName' => $params['RegistrantLastName'],
-                'Company' => $params['RegistrantOrganizationName'],
-                'EMail' => $params['RegistrantEmailAddress'],
-                'AddressLine1' => $params['RegistrantAddress1'],
-                'State' => $params['RegistrantStateProvince'],
-                'City' => $params['RegistrantCity'],
-                'Country' => $params['RegistrantCountry'],
-                'Phone' => $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'PhoneCountryCode' => $this->validateCountryCode($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'Type' => 'Contact',
-                'ZipCode' => $params['RegistrantPostalCode'],
-                'Status' => ''
-            ],
-            'Technical' => [
-                'FirstName' => $params['RegistrantFirstName'],
-                'LastName' => $params['RegistrantLastName'],
-                'Company' => $params['RegistrantOrganizationName'],
-                'EMail' => $params['RegistrantEmailAddress'],
-                'AddressLine1' => $params['RegistrantAddress1'],
-                'State' => $params['RegistrantStateProvince'],
-                'City' => $params['RegistrantCity'],
-                'Country' => $params['RegistrantCountry'],
-                'Phone' => $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'PhoneCountryCode' => $this->validateCountryCode($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'Type' => 'Contact',
-                'ZipCode' => $params['RegistrantPostalCode'],
-                'Status' => ''
-            ],
-            'Registrant' => [
-                'FirstName' => $params['RegistrantFirstName'],
-                'LastName' => $params['RegistrantLastName'],
-                'Company' => $params['RegistrantOrganizationName'],
-                'EMail' => $params['RegistrantEmailAddress'],
-                'AddressLine1' => $params['RegistrantAddress1'],
-                'State' => $params['RegistrantStateProvince'],
-                'City' => $params['RegistrantCity'],
-                'Country' => $params['RegistrantCountry'],
-                'Phone' => $this->validatePhone($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'PhoneCountryCode' => $this->validateCountryCode($params['RegistrantPhone'], $params['RegistrantCountry']),
-                'Type' => 'Contact',
-                'ZipCode' => $params['RegistrantPostalCode'],
-                'Status' => ''
-            ]
+        $result = $this->api->RegisterWithContactInfo($params['sld'] . '.' . $params['tld'], $params['NumYears'], [
+                'Administrative' => $this->contactInfoToArray($params),
+                'Billing'        => $this->contactInfoToArray($params),
+                'Technical'      => $this->contactInfoToArray($params),
+                'Registrant'     => $this->contactInfoToArray($params)
             ],
             $nameServers,
             true,
             $privacy
         );
+
         $this->logCall();
 
         if ($result['result'] == 'OK') {
@@ -304,6 +229,32 @@ class PluginDomainnameapi extends RegistrarPlugin
             throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
         }
     }
+
+    private function contactInfoToArray($params, $set = false)
+{
+    $contactInfo = [
+        'FirstName'        => $params[$set ? 'Registrant_FirstName' : 'RegistrantFirstName'],
+        'LastName'         => $params[$set ? 'Registrant_LastName' : 'RegistrantLastName'],
+        'Company'          => $params[$set ? 'Registrant_OrganizationName' : 'RegistrantOrganizationName'],
+        'EMail'            => $params[$set ? 'Registrant_EmailAddress' : 'RegistrantEmailAddress'],
+        'AddressLine1'     => $params[$set ? 'Registrant_Address1' : 'RegistrantAddress1'],
+        'AddressLine2'     => $params[$set ? 'Registrant_Address2' : 'RegistrantAddress2'],
+        'City'             => $params[$set ? 'Registrant_City' : 'RegistrantCity'],
+        'Country'          => $params[$set ? 'Registrant_Country' : 'RegistrantCountry'],
+        'Fax'              => $params[$set ? 'Registrant_Fax' : 'RegistrantFax'],
+        'Phone'            => $this->validatePhone($params[$set ? 'Registrant_Phone' : 'RegistrantPhone'], $params[$set ? 'Registrant_Country' : 'RegistrantCountry']),
+        'PhoneCountryCode' => $this->validateCountryCode($params[$set ? 'Registrant_Phone' : 'RegistrantPhone'], $params[$set ? 'Registrant_Country' : 'RegistrantCountry']),
+        'Type'             => 'Contact',
+        'ZipCode'          => $params[$set ? 'Registrant_PostalCode' : 'RegistrantPostalCode'],
+        'State'            => $params[$set ? 'Registrant_StateProvince' : 'RegistrantStateProvince'],
+    ];
+
+    if (!$set) {
+        $contactInfo['Status'] = '';
+    }
+
+    return $contactInfo;
+}
 
     private function validateCountryCode($country)
     {
@@ -374,70 +325,10 @@ class PluginDomainnameapi extends RegistrarPlugin
         $result = $this->api->SaveContacts(
             $params['sld'] . '.' . $params['tld'],
             [
-                'Administrative' => [
-                    'FirstName' => $params['Registrant_FirstName'],
-                    'LastName' => $params['Registrant_LastName'],
-                    'Company' => $params['Registrant_OrganizationName'],
-                    'EMail' => $params['Registrant_EmailAddress'],
-                    'AddressLine1' => $params['Registrant_Address1'],
-                    'AddressLine2' => $params['Registrant_Address2'],
-                    'City' => $params['Registrant_City'],
-                    'Country' => $params['Registrant_Country'],
-                    'Fax' => $params['Registrant_Fax'],
-                    'Phone' => $this->validatePhone($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'PhoneCountryCode' => $this->validateCountryCode($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'Type' => 'Contact',
-                    'ZipCode' => $params['Registrant_PostalCode'],
-                    'State' =>  $params['Registrant_StateProvince'],
-                ],
-                'Billing' => [
-                    'FirstName' => $params['Registrant_FirstName'],
-                    'LastName' => $params['Registrant_LastName'],
-                    'Company' => $params['Registrant_OrganizationName'],
-                    'EMail' => $params['Registrant_EmailAddress'],
-                    'AddressLine1' => $params['Registrant_Address1'],
-                    'AddressLine2' => $params['Registrant_Address2'],
-                    'City' => $params['Registrant_City'],
-                    'Country' => $params['Registrant_Country'],
-                    'Fax' => $params['Registrant_Fax'],
-                    'Phone' => $this->validatePhone($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'PhoneCountryCode' => $this->validateCountryCode($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'Type' => 'Contact',
-                    'ZipCode' => $params['Registrant_PostalCode'],
-                    'State' =>  $params['Registrant_StateProvince'],
-                ],
-                'Technical' => [
-                    'FirstName' => $params['Registrant_FirstName'],
-                    'LastName' => $params['Registrant_LastName'],
-                    'Company' => $params['Registrant_OrganizationName'],
-                    'EMail' => $params['Registrant_EmailAddress'],
-                    'AddressLine1' => $params['Registrant_Address1'],
-                    'AddressLine2' => $params['Registrant_Address2'],
-                    'City' => $params['Registrant_City'],
-                    'Country' => $params['Registrant_Country'],
-                    'Fax' => $params['Registrant_Fax'],
-                    'Phone' => $this->validatePhone($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'PhoneCountryCode' => $this->validateCountryCode($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'Type' => 'Contact',
-                    'ZipCode' => $params['Registrant_PostalCode'],
-                    'State' =>  $params['Registrant_StateProvince'],
-                ],
-                'Registrant' => [
-                    'FirstName' => $params['Registrant_FirstName'],
-                    'LastName' => $params['Registrant_LastName'],
-                    'Company' => $params['Registrant_OrganizationName'],
-                    'EMail' => $params['Registrant_EmailAddress'],
-                    'AddressLine1' => $params['Registrant_Address1'],
-                    'AddressLine2' => $params['Registrant_Address2'],
-                    'City' => $params['Registrant_City'],
-                    'Country' => $params['Registrant_Country'],
-                    'Fax' => $params['Registrant_Fax'],
-                    'Phone' => $this->validatePhone($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'PhoneCountryCode' => $this->validateCountryCode($params['Registrant_Phone'], $params['Registrant_Country']),
-                    'Type' => 'Contact',
-                    'ZipCode' => $params['Registrant_PostalCode'],
-                    'State' =>  $params['Registrant_StateProvince'],
-                ],
+                'Administrative' =>  $this->contactInfoToArray($params, true) ,
+                'Billing' =>   $this->contactInfoToArray($params, true),
+                'Technical' =>   $this->contactInfoToArray($params, true),
+                'Registrant' =>   $this->contactInfoToArray($params, true),
             ]
         );
         $this->logCall();
@@ -457,23 +348,10 @@ class PluginDomainnameapi extends RegistrarPlugin
         $info = [];
 
         if ($result["result"] == "OK") {
-            if (isset($result["data"]["NameServers"][0][0])) {
-                $info[] = $result["data"]["NameServers"][0][0];
-            }
-            if (isset($result["data"]["NameServers"][0][1])) {
-                $info[] = $result["data"]["NameServers"][0][1];
-            }
-            if (isset($result["data"]["NameServers"][0][2])) {
-                $info[] = $result["data"]["NameServers"][0][2];
-            }
-            if (isset($result["data"]["NameServers"][0][3])) {
-                $info[] = $result["data"]["NameServers"][0][3];
-            }
-            if (isset($result["data"]["NameServers"][0][4])) {
-                $info[] = $result["data"]["NameServers"][0][4];
-            }
 
-            return $info;
+            $nameservers = isset($result["data"]["NameServers"][0]) ? $result["data"]["NameServers"] : [];
+
+            return array_values($nameservers);
         } else {
             throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
         }
@@ -505,8 +383,8 @@ class PluginDomainnameapi extends RegistrarPlugin
             $data = [];
             $data['domain'] = $result['data']['DomainName'];
             $data['expiration'] = $result['data']['Dates']['Expiration'];
-            $data['is_registered'] = ($result['data']['Status'] == 'ACTIVE') ? true : false;
-            $data['is_expired'] = ($result['data']['Status'] == 'PendingDelete') ? true : false;
+            $data['is_registered'] = $result['data']['Status'] == 'ACTIVE';
+            $data['is_expired'] = strtotime($result['data']['Dates']['Expiration'])>time();
             $data['registrationstatus'] = 'N/A';
             $data['purchasestatus'] = 'N/A';
 
@@ -520,24 +398,47 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $this->setup();
         $domainsList = [];
-        $domainNameGateway = new DomainNameGateway();
 
-        $result = $this->api->GetList();
+        $pageLength = 100;
+        $page=1;
+        if ($params['next'] > $pageLength) {
+            $page = ceil($params['next'] / $pageLength);
+        }
+        $getListArgs = [
+            'PageSize'       => $pageLength,
+            'PageNumber'     => $page,
+            'OrderColumn'    => 'Id',
+            'OrderDirection' => 'DESC',
+        ];
+
+        $result = $this->api->GetList($getListArgs);
         if (is_array($result['data']['Domains'])) {
             foreach ($result['data']['Domains'] as $domain) {
-                $temp = $domainNameGateway->splitDomain($domain['DomainName']);
+
+               $domainName = trim($domain['DomainName']);
+                $temp = explode('.', $domainName);
+                $sld = $temp[0];
+                unset($temp[0]);
+                $tld = implode('.', $temp);
+
 
                 $data = [
                     'id' => $domain['ID'],
-                    'sld' => $temp[0],
-                    'tld' => $temp[1],
+                    'sld' => $sld,
+                    'tld' => $tld,
                     'exp' => $domain['Dates']['Expiration']
                 ];
                 $domainsList[] = $data;
             }
         }
 
-        return [$domainsList, []];
+        $metaData               = [];
+        $metaData['total']      = (int)$result['TotalCount'];
+        $metaData['next']       = $page * $pageLength + 1;
+        $metaData['start']      = 1 + ($page - 1) * $pageLength;
+        $metaData['end']        = min($page * $pageLength, $metaData['total']);
+        $metaData['numPerPage'] = $pageLength;
+        return [$domainsList, $metaData];
     }
 
     public function getRegistrarLock($params)
@@ -545,7 +446,7 @@ class PluginDomainnameapi extends RegistrarPlugin
         $this->setup();
         $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
         if ($result['result'] == 'OK') {
-            return ($result['data']['LockStatus'] == 'true' ) ? true : false;
+            return $result['data']['LockStatus'] == 'true';
         } else {
             throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
         }
@@ -555,7 +456,7 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $userPackage = new UserPackage($params['userPackageId']);
         $this->setRegistrarLock($this->buildLockParams($userPackage, $params));
-        return "Updated Registrar Lock.";
+        return $this->user->lang('Updated Registrar Lock.');
     }
 
     public function setRegistrarLock($params)
@@ -570,6 +471,7 @@ class PluginDomainnameapi extends RegistrarPlugin
             }
             $this->logCall();
             if ($result['result'] == 'OK') {
+                $this->user->lang('Registrar Lock updated successfully.');
             } else {
                 throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
             }
@@ -592,10 +494,10 @@ class PluginDomainnameapi extends RegistrarPlugin
     private function logCall()
     {
         CE_Lib::log(4, 'DomainName API Request:');
-        CE_Lib::log(4, $this->api->__REQUEST);
+        CE_Lib::log(4, $this->api->getRequestData());
 
         CE_Lib::log(4, 'DomainName API Response:');
-        CE_Lib::log(4, $this->api->__RESPONSE);
+        CE_Lib::log(4, $this->api->getResponseData());
     }
 
     public function getDNS($params)
@@ -622,13 +524,72 @@ class PluginDomainnameapi extends RegistrarPlugin
 
     public function registerNS($params)
     {
+        $this->setup();
+        $nameserver = $params['nsname'];
+        $ip         = $params['nsip'];
+        $result     = $this->api->AddChildNameServer($params['sld'] . '.' . $params['tld'], $nameserver, $ip);
+        $this->logCall();
+        if ($result['result'] == 'OK') {
+            return $this->user->lang('Name Server registered successfully.');
+        } else {
+            throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
+        }
     }
 
     public function editNS($params)
     {
+        $this->setup();
+        $nameserver = $params['nsname'];
+        $newIp      = $params['nsnewip'];
+        $result     = $this->api->ModifyChildNameServer($params['sld'] . '.' . $params['tld'], $nameserver, $newIp);
+        $this->logCall();
+        if ($result['result'] == 'OK') {
+            return $this->user->lang('Name Server updated successfully.');
+        } else {
+            throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
+        }
     }
 
     public function deleteNS($params)
     {
+        $this->setup();
+        $nameserver = $params['nsname'];
+        $result     = $this->api->DeleteChildNameServer($params['sld'] . '.' . $params['tld'], $nameserver);
+        $this->logCall();
+        if ($result['result'] == 'OK') {
+            return $this->user->lang('Name Server deleted successfully.');
+        } else {
+            throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
+        }
     }
+
+   public function getTLDsAndPrices($params)
+{
+    $this->setup();
+    $tldlist = $this->api->GetTldList(1200);
+    $this->logCall();
+
+    $tlds = [];
+    if ($tldlist['result'] == 'OK') {
+        foreach ($tldlist['data'] as $extension) {
+            if(strlen($extension['tld'])>1){
+                $price_registration = $extension['pricing']['registration'][1];
+                $price_renew        = $extension['pricing']['renew'][1];
+                $price_transfer     = $extension['pricing']['transfer'][1];
+                $current_currency   = $extension['currencies']['registration'];
+
+                $tlds[$extension['tld']]['register']=$price_registration;
+                $tlds[$extension['tld']]['renew']=$price_renew;
+                $tlds[$extension['tld']]['transfer']=$price_transfer;
+
+            }
+        }
+        return $tlds;
+    } else {
+        throw new CE_Exception($tldlist['error']['Message'] . "\n" . $tldlist['error']['Details']);
+    }
+
+
+}
+
 }
