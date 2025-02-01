@@ -6,7 +6,7 @@ require_once 'plugins/registrars/domainnameapi/api.php';
 
 class PluginDomainnameapi extends RegistrarPlugin
 {
-    public const MODULE_VERSION='1.0.2';
+    public const MODULE_VERSION='1.0.3';
     public $features = [
         'nameSuggest' => false,
         'importDomains' => true,
@@ -23,8 +23,7 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $this->api = new DomainNameAPI_PHPLibrary(
             $this->settings->get('plugin_Domainnameapi_Username'),
-            $this->settings->get('plugin_Domainnameapi_Password'),
-            DomainNameAPI_PHPLibrary::APPLICATION_CLIENTEXEC
+            $this->settings->get('plugin_Domainnameapi_Password')
         );
 
     }
