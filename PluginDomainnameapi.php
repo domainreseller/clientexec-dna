@@ -6,7 +6,7 @@ require_once 'plugins/registrars/domainnameapi/api.php';
 
 class PluginDomainnameapi extends RegistrarPlugin
 {
-    public const MODULE_VERSION='1.0.4';
+    public const MODULE_VERSION='1.0.5';
     public $features = [
         'nameSuggest' => false,
         'importDomains' => true,
@@ -102,12 +102,13 @@ class PluginDomainnameapi extends RegistrarPlugin
         $result = $this->api->CheckAvailability([$params['sld']], $tldList, '1', 'create');
         $this->logCall();
 
-        if ($result['result'] == 'OK') {
-            foreach ($result['data'] as $domain) {
-                $status    = ($domain['Status'] == 'notavailable') ? 1 : 0;
+
+        if (is_array($result)) {
+            foreach ($result as $results) {
+                $status    = ($results['Status'] == 'notavailable') ? 1 : 0;
                 $domains[] = [
-                    'tld'    => $domain['TLD'],
-                    'domain' => $domain['DomainName'],
+                    'tld'    => $results['TLD'],
+                    'domain' => $results['DomainName'],
                     'status' => $status
                 ];
             }
@@ -299,18 +300,18 @@ class PluginDomainnameapi extends RegistrarPlugin
             $info = [];
             foreach (['Administrative', 'Billing', 'Registrant', 'Technical'] as $type) {
                 $data = $result['data']['contacts'][$type];
-                $info[$type]['OrganizationName']  = [$this->user->lang('Organization'), $data['Company']];
-                $info[$type]['FirstName'] = [$this->user->lang('First Name'), $data['FirstName']];
-                $info[$type]['LastName']  = [$this->user->lang('Last Name'), $data['LastName']];
-                $info[$type]['Address1']  = [$this->user->lang('Address') . ' 1', $data['Address']['Line1']];
-                $info[$type]['Address2']  = [$this->user->lang('Address') . ' 2', $data['Address']['Line2']];
-                $info[$type]['City']      = [$this->user->lang('City'), $data['Address']['City']];
-                $info[$type]['StateProvince']  = [$this->user->lang('Province') . '/' . $this->user->lang('State'), $data['Address']['State']];
-                $info[$type]['Country']   = [$this->user->lang('Country'), $data['Address']['Country']];
-                $info[$type]['PostalCode']  = [$this->user->lang('Postal Code'), $data['Address']['ZipCode']];
-                $info[$type]['EmailAddress']     = [$this->user->lang('E-mail'), $data['EMail']];
-                $info[$type]['Phone']  = [$this->user->lang('Phone'), $data['Phone']['Phone']['Number']];
-                $info[$type]['Fax']       = [$this->user->lang('Fax'), $data['Phone']['Fax']['Number']];
+                $info[$type]['OrganizationName']    = [$this->user->lang('Organization'), $data['Company']];
+                $info[$type]['FirstName']           = [$this->user->lang('First Name'), $data['FirstName']];
+                $info[$type]['LastName']            = [$this->user->lang('Last Name'), $data['LastName']];
+                $info[$type]['Address1']            = [$this->user->lang('Address') . ' 1', $data['Address']['Line1']];
+                $info[$type]['Address2']            = [$this->user->lang('Address') . ' 2', $data['Address']['Line2']];
+                $info[$type]['City']                = [$this->user->lang('City'), $data['Address']['City']];
+                $info[$type]['StateProvince']       = [$this->user->lang('Province') . '/' . $this->user->lang('State'), $data['Address']['State']];
+                $info[$type]['Country']             = [$this->user->lang('Country'), $data['Address']['Country']];
+                $info[$type]['PostalCode']          = [$this->user->lang('Postal Code'), $data['Address']['ZipCode']];
+                $info[$type]['EmailAddress']        = [$this->user->lang('E-mail'), $data['EMail']];
+                $info[$type]['Phone']               = [$this->user->lang('Phone'), $data['Phone']['Phone']['Number']];
+                $info[$type]['Fax']                 = [$this->user->lang('Fax'), $data['Phone']['Fax']['Number']];
             }
             return $info;
         } else {
@@ -398,8 +399,8 @@ class PluginDomainnameapi extends RegistrarPlugin
         $this->setup();
         $domainsList = [];
 
-        $pageLength = 100;
-        $page=1;
+        $pageLength = 100000;
+        $page=0;
         if ($params['next'] > $pageLength) {
             $page = ceil($params['next'] / $pageLength);
         }
@@ -572,14 +573,14 @@ class PluginDomainnameapi extends RegistrarPlugin
     if ($tldlist['result'] == 'OK') {
         foreach ($tldlist['data'] as $extension) {
             if(strlen($extension['tld'])>1){
-                $price_registration = $extension['pricing']['registration'][1];
-                $price_renew        = $extension['pricing']['renew'][1];
-                $price_transfer     = $extension['pricing']['transfer'][1];
+                $price_registration = $extension['pricing']['registration']['1'];
+                $price_renew        = $extension['pricing']['renew']['1'];
+                $price_transfer     = $extension['pricing']['transfer']['1'];
                 $current_currency   = $extension['currencies']['registration'];
 
-                $tlds[$extension['tld']]['register']=$price_registration;
-                $tlds[$extension['tld']]['renew']=$price_renew;
-                $tlds[$extension['tld']]['transfer']=$price_transfer;
+                $tlds[$extension['tld']]['pricing']['register']=(float)$price_registration;
+                $tlds[$extension['tld']]['pricing']['renew']=(float)$price_renew;
+                $tlds[$extension['tld']]['pricing']['transfer']=(float)$price_transfer;
 
             }
         }
