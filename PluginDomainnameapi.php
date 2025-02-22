@@ -6,7 +6,7 @@ require_once 'plugins/registrars/domainnameapi/api.php';
 
 class PluginDomainnameapi extends RegistrarPlugin
 {
-    public const MODULE_VERSION='1.0.6';
+    public const MODULE_VERSION='1.0.7';
     public $features = [
         'nameSuggest' => false,
         'importDomains' => true,
@@ -74,12 +74,12 @@ class PluginDomainnameapi extends RegistrarPlugin
             lang('Registered Actions') => [
                 'type' => 'hidden',
                 'description' => lang('Current actions that are active for this plugin (when a domain is registered)'),
-                'value' => 'Renew (Renew Domain),DomainTransferWithPopup (Initiate Transfer),Cancel',
+                'value' => 'SetPrivacyWhois ('.lang('Toggle Privacy Whois').'),Renew (Renew Domain),DomainTransferWithPopup (Initiate Transfer)',
             ],
             lang('Registered Actions For Customer') => [
                 'type' => 'hidden',
                 'description' => lang('Current actions that are active for this plugin (when a domain is registered)'),
-                'value' => '',
+                'value' => 'SetPrivacyWhois ('.lang('Toggle Privacy Whois').')',
             ]
         ];
 
@@ -377,7 +377,11 @@ class PluginDomainnameapi extends RegistrarPlugin
     public function getGeneralInfo($params)
     {
         $this->setup();
-        $result = $this->api->SyncFromRegistry($params['sld'] . '.' . $params['tld']);
+        $domain = $params['sld'] . '.' . $params['tld'];
+        if(isset($params['domain'])){
+            $domain = $params['domain'];
+        }
+        $result = $this->api->SyncFromRegistry($domain);
 
         if ($result['result'] == 'OK') {
             $data = [];
@@ -387,6 +391,8 @@ class PluginDomainnameapi extends RegistrarPlugin
             $data['is_expired'] = strtotime($result['data']['Dates']['Expiration'])>time();
             $data['registrationstatus'] = 'N/A';
             $data['purchasestatus'] = 'N/A';
+            $data['is_locked'] = $result['data']['LockStatus']==='true';
+            $data['is_privacy_protected'] = $result['data']['PrivacyProtectionStatus']==='true';
 
             return $data;
         } else {
@@ -478,6 +484,36 @@ class PluginDomainnameapi extends RegistrarPlugin
         } else {
             throw new CE_Exception($result['error']['Message'] . "\n" . $result['error']['Details']);
         }
+    }
+
+    public function doSetPrivacyWhois($params): string
+    {
+        $userPackage = new UserPackage($params['userPackageId']);
+        $domain      = $userPackage->getCustomField('Domain Name');
+
+
+        if ($userPackage->status == PACKAGE_STATUS_PENDING) {
+            return $this->user->lang("This domain is currently not active");
+        }
+
+        $params['domain']=$domain;
+        $domainDetail = $this->getGeneralInfo($params);
+
+        if (!is_array($domainDetail)) {
+            return $this->user->lang("Error fetching domain details");
+        }
+
+        if ($domainDetail['is_privacy_protected']===true) {
+            $modifyResult = $this->api->ModifyPrivacyProtectionStatus($domain, false);
+        } else {
+            $modifyResult = $this->api->ModifyPrivacyProtectionStatus($domain, true);
+        }
+
+        if($modifyResult['result'] != 'OK'){
+            throw new CE_Exception($modifyResult['error']['Message'] . "\n" . $modifyResult['error']['Details']);
+        }
+
+        return $this->user->lang("Whois privacy for domain %s is now %s", $domain, $modifyResult['data']['PrivacyProtectionStatus'] ? "enabled" : "disabled");
     }
 
     public function getEPPCode($params)
