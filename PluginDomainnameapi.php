@@ -602,7 +602,10 @@ class PluginDomainnameapi extends RegistrarPlugin
    public function getTLDsAndPrices($params)
 {
     $this->setup();
-    $tldlist = $this->api->GetTldList(1200);
+    // REST gateway caps MaxResultCount at 1000 (returns 400 ModelState
+    // for anything higher); SOAP works with 1000 too. Total catalogue is
+    // ~850 TLDs so 1000 covers everything.
+    $tldlist = $this->api->GetTldList(1000);
     $this->logCall();
 
     $tlds = [];
