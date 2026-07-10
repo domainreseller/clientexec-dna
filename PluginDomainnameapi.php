@@ -6,7 +6,7 @@ require_once 'plugins/registrars/domainnameapi/api.php';
 
 class PluginDomainnameapi extends RegistrarPlugin
 {
-    public const MODULE_VERSION='2.0.9';
+    public const MODULE_VERSION='2.0.10';
     public $features = [
         'nameSuggest' => false,
         'importDomains' => true,
