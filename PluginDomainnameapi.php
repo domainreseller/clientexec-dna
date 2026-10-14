@@ -43,12 +43,12 @@ class PluginDomainnameapi extends RegistrarPlugin
             ],
             lang('Username') => [
                 'type' => 'text',
-                'description' => lang('Enter your username for your Domain Name Api reseller account.'),
+                'description' => lang('Enter your Reseller ID from the API Settings section of your Domain Name API panel.'),
                 'value' => ''
             ],
             lang('Password')  => [
                 'type' => 'password',
-                'description' => lang('Enter the password for your Domain Name API reseller account.'),
+                'description' => lang('Enter your API Key from the API Settings section of your Domain Name API panel.'),
                 'value' => '',
             ],
             lang('NameServer 1') => [
@@ -672,8 +672,8 @@ class PluginDomainnameapi extends RegistrarPlugin
 {
     $this->setup();
     // REST gateway caps MaxResultCount at 1000 (returns 400 ModelState
-    // for anything higher); SOAP works with 1000 too. Total catalogue is
-    // ~850 TLDs so 1000 covers everything.
+    // for anything higher). Total catalogue is ~850 TLDs so 1000 covers
+    // everything.
     $tldlist = $this->api->GetTldList(1000);
     $this->logCall();
 
