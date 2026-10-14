@@ -23,7 +23,8 @@ class PluginDomainnameapi extends RegistrarPlugin
     {
         $this->api = new DomainNameAPI_PHPLibrary(
             $this->settings->get('plugin_Domainnameapi_Username'),
-            $this->settings->get('plugin_Domainnameapi_Password')
+            $this->settings->get('plugin_Domainnameapi_Password'),
+            (bool) $this->settings->get('plugin_Domainnameapi_Use testing server')
         );
 
     }
