@@ -26,6 +26,7 @@ class PluginDomainnameapi extends RegistrarPlugin
             $this->settings->get('plugin_Domainnameapi_Password'),
             (bool) $this->settings->get('plugin_Domainnameapi_Use testing server')
         );
+        if (method_exists($this->api, 'setClientInfo')) { $this->api->setClientInfo('clientexec', self::MODULE_VERSION); }
 
     }
 
